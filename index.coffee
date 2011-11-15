@@ -16,8 +16,11 @@ as = module.exports = (objects..., actions) ->
     ps = currentPromises
     currentPromises = []
 
+    # console.log "RET", ret, ret.value
+
     return (cb) ->
         runPromises ps.concat(), (err) -> 
+            # console.log "DONE RUN", ret, ret.value
             if err then return cb err
             cb null, promiseValue ret
 
@@ -36,7 +39,7 @@ as.convert = convert = (obj) ->
 
 
 runPromises = (ps, cb) ->
-    console.log("RUN PROMiSES", ps)
+    # console.log("RUN PROMISES", ps)
     parallels = []
 
     flushParallels = (cb) ->
@@ -71,30 +74,52 @@ runParallel = (ps, cb) ->
                 cb()
 
 runPromise = (p, cb) ->
-    console.log "Run Promise", p
+
+    # make sure we're referencing the promise object and not the proxy
+    p = p.source()
 
     # this function set up both a callback AND checks for the return. It shouldn't do both
     # If return is called, throw an error
+
+    # console.log "RUN PROMISE", p
 
     finished = false
     callback = (err, result) ->
         if finished then throw new Error "Promise both returned and called back, or called back twice"
         finished = true
-        p.done result
-        process.nextTick -> cb err, result
+        p.value = result
+        # console.log "RAN PROMISE", p, result, p.value, promiseValue p
+        process.nextTick -> cb err
     callback.inspect = -> "" # so it won't show up in traces
 
-    p.args.push callback
-    ret = p.action.apply p, p.args.map promiseValue
-    if ret? then callback null, ret
+    if p.type == "NORMAL"
+        args = p.args.concat()
+        args.push callback
+        args = args.map promiseValue
+        ret = p.action.apply p, args # in normal mode, check ret
+        if ret? then callback null, ret
+
+    else
+        parentValue = p.parent.value || {}
+
+        ret = switch p.type
+            when "GET" then parentValue[p.property] 
+            when "SET" then parentValue[p.property] = promiseValue p.setTo
+            when "CALL" then parentValue.apply p.parent, p.args
+            else throw new Error "Bad Promise Type"
+
+        callback null, ret
+    
+
 
 promiseValue = (p) -> 
+    # console.log "PROMISe VALUE", p, p.value
     # if it is a promise, then return
-    if p? and p.isPromise then return p.value()
+    if p? and p.isPromise then return p.source().value
 
     # if it is an object, support a single level of nesting
     for prop, val of p
-        if val.isPromise then p[prop] = val.value()
+        if val.isPromise then p[prop] = val.source().value
 
     p
 
@@ -105,65 +130,87 @@ promiseValue = (p) ->
 # see if you can get that to work, and have previous tests pass
 
 as.promise = promise = (action, args) ->
-    makeProxy new Promise action, args
+    makeProxy Promise.Normal action, args
 
 makeProxy = (p) ->
     handler =
         get: (r, n) -> 
+            # console.log "GET", n
             if p[n]? then ensureBoundFunction p, p[n]
             else 
-                binding = new Binding p, (val) -> val[n]
-                currentPromises.push binding
-                makeProxy binding
+                getter = Promise.Getter p, n
+                currentPromises.push getter
+                # console.log "MADE GETTER"
+                makeProxy getter
 
         # return a promise to set stuff
         # hmm, it might be easier to do get/call this way too
         # except that if they're not used, they won't even be executed :)
         set: (r, n, v) -> 
-            currentPromises.push new Promise ->
-                dest = p.value()
-                if not dest? then return null
+            setter = Promise.Setter p, n, v
+            currentPromises.push setter
 
-                if v.isPromise
-                    v = v.value()
-
-                dest[n] = v
-
-        call: (r) -> 
-            binding = new Binding p, (val) -> val()
-            currentPromises.push binding
-            makeProxy binding
+        call: (args...) -> 
+            # bindings don't partially apply arguments!
+            # Oh, wait, I need the args of call, no?
+            caller = Promise.Caller p, args
+            currentPromises.push caller
+            makeProxy caller
 
     proxy = Proxy.createFunction handler, handler.call
 
 
 class Promise
-    constructor: (action, args) -> 
-        @action = action || ->
-        @args = args || []
-        @val = null
+    constructor: () -> 
+        @parent = {}
+        @args = []
+        @value = null
         @parallel = false
-    p: -> @parallel = true; this
-    done: (v) -> @val = v
-    value: -> @val
-    inspect: -> inspectFunction @action, @args
-        
+        @action = null
+
+        @type = null
+        @property = null # name of property to get/set
+        @setTo = null # promise to set to
+
     isPromise: true
 
-class Binding extends Promise
-    constructor: (parent, getValue) ->
-        @parent = parent
-        @val = null
-        @args = []
-        @getValue = getValue
-        @action = @run
-    done: -> # ignore done, the value isn't correct
-    inspect: -> "{ Binding #{@parent.value()} #{@val}}"
-    run: (cb) -> 
-        parentValue = @parent.value()
-        if parentValue? then @val = @getValue parentValue else null
-        cb()
-        return undefined # so it isn't treated as a return 
+    # puts the promise into parallel mode
+    p: -> @parallel = true; this
+
+    # allows you to access the internal object, rather than the proxy
+    source: -> this
+
+    inspect: -> inspectPromise this
+
+Promise.Getter = (parent, n) ->
+    p = new Promise()
+    p.parent = parent
+    p.type = "GET"
+    p.property = n
+    p
+
+Promise.Setter = (parent, n, v) ->
+    p = new Promise()
+    p.type = "SET"
+    p.parent = parent
+    p.property = n
+    p.setTo = v
+    p
+
+Promise.Caller = (parent, args) -> # calls the parent
+    p = new Promise()
+    p.type = "CALL"
+    p.parent = parent
+    p.args = args
+    p
+
+Promise.Normal = (action, args) -> # calls the passed in function
+    p = new Promise()
+    p.type = "NORMAL"
+    p.args = args
+    p.action = action
+    p
+
 
 
 # HELPERS #
@@ -173,18 +220,42 @@ ensureBoundFunction = (p, value) ->
         value = value.bind p
     return value
 
+inspectObj = (arg) ->
+    if arg.inspect? 
+        arg.inspect() 
+    else if typeof arg == 'function'
+        inspectFunction arg, []
+    else arg
+
 inspectArgs = (args) ->
-    mapped = args.map (arg) ->
-        if arg.inspect? 
-            arg.inspect() 
-        else if typeof arg == 'function'
-            inspectFunction arg, []
-        else arg
-    mapped.join ','
+   args.map(inspectObj).join ','
 
 inspectFunction = (f, args) ->
+    # f.toString()
     f.toString().replace(/function\s*(\w*).*?\s*\{[\s\S]+/, "$1") + "(" + inspectArgs(args) + ")"
 
+inspectPromise = (p) -> 
+    out = ""
+    out += inspectPromiseNoValue p
+    if p.value? then out += " = " + inspectObj(p.value)
+    out
+
+inspectPromiseNoValue = (p) ->
+    if not (p instanceof Promise) then return ""
+
+    out = "" 
+    if p.parent? then out += inspectPromiseNoValue p.parent
+
+    switch p.type 
+        when "NORMAL" then if p.action? then out += inspectFunction p.action, p.args
+        when "GET" then out += "." + p.property
+        when "CALL" then out += "(" + inspectArgs(p.args) + ")"
+        else out += " ??"
+
+    out
+
+    # else if p.action? then inspectFunction p.action, p.args
+    # else "??"
 
 
 
@@ -209,8 +280,7 @@ inspectFunction = (f, args) ->
 
 
 
-
-
+ 
 
 
 

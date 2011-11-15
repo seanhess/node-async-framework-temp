@@ -1,6 +1,8 @@
 
-if (module == require.main) 
+if (module == require.main) {
+    var cp = require('child_process')
     require("async_testing").run([__filename], function() {})
+}
 
 // Helper methods
 function delay(cb) {
@@ -41,8 +43,7 @@ function makeWriter() {
 }
 
 var cs = require("coffee-script")
-var as = require("./")
-
+var as = require("./index.js")
 
 exports.simpleSteps = function(assert) {
 
@@ -89,7 +90,6 @@ exports.asyncSteps = function(assert) {
     })
 }
 
-
 exports.parallelSteps = function(assert) {
 
     var write = makeWriter()
@@ -110,7 +110,6 @@ exports.parallelSteps = function(assert) {
 
 }
 
-
 exports.parallelThenSequence = function(assert) {
 
     var write = makeWriter()
@@ -130,6 +129,25 @@ exports.parallelThenSequence = function(assert) {
         assert.finish()
     })
 }
+
+exports.simpleValue = function(assert) {
+
+    function getValue(cb) {
+        cb(null, 3)
+    }
+
+    var actions = as(getValue, function(getValue) {
+        return getValue()
+    })
+
+    actions(function(err, val) {
+        assert.ifError(err)
+        assert.equal(val, 3)
+        assert.finish()
+    })
+}
+
+
 
 exports.immediateValues = function(assert) {
 
@@ -181,7 +199,7 @@ exports.passingValues = function(assert) {
         var current = two
 
         // use case: I want to get a bunch of stuff async and get it into an array
-        for (var i = 0; i < 10; i ++)
+        for (var i = 0; i < 3; i ++)
             current = add1(two).p()
 
         return add1(add1(current))
@@ -193,7 +211,6 @@ exports.passingValues = function(assert) {
         assert.finish()
     })
 }
-
 
 // right now, you couldn't do that, but you could do: renderScores(req, scores, blah, blah)
 exports.nestedObjects = function(assert) {
@@ -220,7 +237,6 @@ exports.nestedObjects = function(assert) {
 }
 
 
-
 exports.accessSubPropertyOfPromise = function(assert) {
 
     // pretend this is something async
@@ -237,7 +253,7 @@ exports.accessSubPropertyOfPromise = function(assert) {
 
     actions(function(err, val) {
         assert.ifError(err)
-        assert.equal(val, "bob")
+        assert.deepEqual(val, "bob")
         assert.finish()
         assert.finish = function() {
             throw new Error("called finish twice")
@@ -247,30 +263,29 @@ exports.accessSubPropertyOfPromise = function(assert) {
 }
 
 
-// try an async and sync sub-function
 exports.accessSubFunctionOfPromise = function(assert) {
 
     function getData(cb) {
         process.nextTick(function() {
-            var person = {name:"bob"}
             cb(null, {
-                getPerson: function() { return person }
+                key: "value",
+                getPerson: function(name) { return {name: name} }
             })
         })
     }
 
     var actions = as(getData, function(getData) {
         var result = getData()
-        return result.getPerson().name
+        return result.getPerson('bob').name
     })
 
     actions(function(err, val) {
         assert.ifError(err)
-        assert.equal(val, "bob")
+        assert.deepEqual(val, "bob")
+        // assert.ok(false, "Need to try an asynchronous function") // don't currently support asynchronous functions
         assert.finish()
     })
 }
-
 
 exports.nullTolerantGets = function(assert) {
     function getData(cb) {
@@ -281,7 +296,11 @@ exports.nullTolerantGets = function(assert) {
 
     var actions = as(getData, function(getData) {
         var result = getData()
-        return result.name.henry
+        var nameValue = result.name
+        // console.log("OK", nameValue, nameValue.source().value)
+        var notRealValue = result.name.henry
+        // console.log("CHECK", notRealValue, notRealValue.source().value)
+        return notRealValue
     })
 
     actions(function(err, val) {
@@ -290,6 +309,7 @@ exports.nullTolerantGets = function(assert) {
         assert.finish()
     })
 }
+
 
 exports.readFromDbSetPropThenSaveThenRead = function(assert) {
     // means you have to figure out how to get it to "set" on a promise
@@ -399,8 +419,8 @@ exports.convertModulesOutside = function(assert) {
 }
 
 
-
 return
+
 
 exports.getExtraDataForEachItem = function(assert) {
 
@@ -425,23 +445,27 @@ exports.getExtraDataForEachItem = function(assert) {
 
         // Ah, and I didn't make CALL and GET be promises
         // So setting functions won't work. K, need to make that change
-        docs.forEach(function(doc) {
-            console.log("FOR EACHING IT UP!")
-            doc.tags = getTagsForDoc(doc)
-            console.log("DONE")
+
+        var res = docs.map(function(doc) {
+            return 3
         })
+
+        console.log("Res?", res)
+        //     // doc.tags = getTagsForDoc(doc)
+        //     // console.log("DONE")
+        // })
+
+        // console.log("OK", res)
 
         // But then it would convert it to a promise, no?
         // I'm not sure what it would do
 
-        return docs
+        return res
     })
 
     actions(function(err, val) {
         assert.ifError(err)
-        assert.ok(val)
-        assert.ok(val.length)
-        assert.deepEqual(val[0], {id:1, tags:["a","b","c"]})
+        assert.deepEqual(val, {id:1, tags:["a","b","c"]})
         assert.finish()
     })
 
@@ -472,6 +496,10 @@ exports.getExtraDataForEachItem = function(assert) {
 //     assert.finish()
 // }
 
+exports.oneBigPromise = function(assert) {
+    assert.ok(false, "while the result of as is a function, it should also be a promise you could include in another one, or print out ")
+    assert.finish()
+}
 
 // Scores.getScores(function(err, defaults, scores) {
 //     if (err) return res.send(err)
