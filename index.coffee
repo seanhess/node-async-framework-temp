@@ -15,7 +15,7 @@ as = module.exports = (objects..., actions) ->
 
     # while the function runs, all created promises go into our queue (globally)
     currentPromises = []
-    ret = actions.apply null, objects.map functionToPromiser
+    ret = actions.apply null, objects.map convert
     ps = currentPromises
     currentPromises = []
 
@@ -25,12 +25,19 @@ as = module.exports = (objects..., actions) ->
             if err then return cb err
             cb null, promiseValue ret
 
-# function that creates a promise to do f
-functionToPromiser = (f) ->
-    return (args...) -> 
-        p = promise f, args
-        currentPromises.push p
-        p
+as.convert = convert = (obj) ->
+    if typeof obj == "function"
+        return (args...) -> 
+            p = promise obj, args
+            currentPromises.push p
+            p
+    else if typeof obj == "object"
+        promiser = {}
+        for key, value of obj
+            promiser[key] = convert value
+        promiser
+    else obj
+
 
 runPromises = (ps, cb) ->
     # console.log("RUN PROMiSES", ps)

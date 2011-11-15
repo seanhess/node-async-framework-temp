@@ -345,17 +345,35 @@ exports.setSomethingToAPromise = function(assert) {
     })
 }
 
+exports.convertEntireModules = function(assert) {
+    var db = makeFakeDb({bob:{name:"bob"}})
 
-// exports.convertEntireModules = function(assert) {
-//     assert.ok(false, "Todo")
-//     assert.finish()
-// }
-// 
-// exports.convertModulesOutside = function(assert) {
-//     assert.ok(false, "Todo")
-//     assert.finish()
-// }
-// 
+    var actions = as(db, function(db) {
+        return db.fetch("bob")
+    })
+
+    actions(function(err, val) {
+        assert.ifError(err)
+        assert.deepEqual(val, {name:"bob"})
+        assert.finish()
+    })
+}
+
+exports.convertModulesOutside = function(assert) {
+    var db = makeFakeDb({bob:{name:"bob"}})
+    dba = as.convert(db)
+
+    var actions = as(function() {
+        return dba.fetch("bob")
+    })
+
+    actions(function(err, val) {
+        assert.ifError(err)
+        assert.deepEqual(val, {name:"bob"})
+        assert.finish()
+    })
+}
+
 // exports.getExtraDataForEachItem = function(assert) {
 // 
 //     // var docs = getDocs() // id, name
@@ -376,7 +394,6 @@ exports.setSomethingToAPromise = function(assert) {
 //     assert.finish()
 // }
 // 
-
 // exports.lists = function(assert) {
 //     assert.ok(false, "Take a list of ids and turn them into a list of objects in the same order")
 //     assert.finish()
@@ -391,216 +408,40 @@ exports.setSomethingToAPromise = function(assert) {
 //     assert.ok(false, "Make it so you can async loop through something and modify each item")
 //     assert.finish()
 // }
+
+
+// Scores.getScores(function(err, defaults, scores) {
+//     if (err) return res.send(err)
 // 
-//     // Scores.getScores(function(err, defaults, scores) {
-//     //     if (err) return res.send(err)
-//     // 
-//     //     res.render("weights", {
-//     //         sources: defaults.sources.toObject(),
-//     //         types: scores
-//     //     })    
-//     // })
+//     res.render("weights", {
+//         sources: defaults.sources.toObject(),
+//         types: scores
+//     })    
+// })
+
+// Entity.statics.findByProgram = function(programId, cb) {
+//     var Entity = this
+//     var AugmentedProgram = mongoose.model("AugmentedProgram")
 // 
+//     AugmentedProgram.findByProgram(programId, function(err, augmentedPrograms) {
+//         if (!augmentedPrograms.length) return cb(null, {})
+//         var entities = {}
+//         var processed = 0
 // 
+//         var step = new Step(cb)
 // 
-// // Entity.statics.findByProgram = function(programId, cb) {
-// //     var Entity = this
-// //     var AugmentedProgram = mongoose.model("AugmentedProgram")
-// // 
-// //     AugmentedProgram.findByProgram(programId, function(err, augmentedPrograms) {
-// //         if (!augmentedPrograms.length) return cb(null, {})
-// //         var entities = {}
-// //         var processed = 0
-// // 
-// //         var step = new Step(cb)
-// // 
-// //         augmentedPrograms.forEach(function(augmentedProgram) {
-// //             step("augment", function(done, entities) {
-// //                 if (!entities) entities = {}
-// // 
-// //                 Entity.findByName(augmentedProgram.name, function(err, entity) {
-// //                     if (err) return cb(err)
-// //                     if (!entities[augmentedProgram.offset]) entities[augmentedProgram.offset] = []
-// //                     entities[augmentedProgram.offset].push(entity)
-// // 
-// //                     done(null, entities)
-// //                 })
-// //             })
-// //         })
-// //     })
-// // }
+//         augmentedPrograms.forEach(function(augmentedProgram) {
+//             step("augment", function(done, entities) {
+//                 if (!entities) entities = {}
 // 
-// // NEXT: Make promises be proxies, so you can do ret.something() or whatever
-// // so you can do sub-objects, etc. 
+//                 Entity.findByName(augmentedProgram.name, function(err, entity) {
+//                     if (err) return cb(err)
+//                     if (!entities[augmentedProgram.offset]) entities[augmentedProgram.offset] = []
+//                     entities[augmentedProgram.offset].push(entity)
 // 
-// // Right now I just support function calls. Maybe that's enough ?
-// // Cause you can do everything else in a function
-// 
-// return
-// 
-// // test promise creation / chaining, etc
-// exports.promise = function(assert) {
-// 
-// 
-//     // Ok, really, it's a series of steps with possible dependencies. 
-//     // So I can't really do this separately
-//     // what I CAN do is make sure the steps execute in series, then start adding dependencies
-// 
-// 
-// 
-// 
-// 
-//     
-// 
-// 
-//     // test resolution 1 deep
-//     var b = as.binding()
-//     b.source({bob: 20})
-//     var r = b.resolve()
-//     assert.ok(r)
-//     assert.equal(r.bob, 20)
-// 
-// 
-//     // test resolution of 1 promise, source swapping
-//     var bob = b.bob
-//     b.source({bob: 20})
-//     r = bob.resolve()
-//     
-//     assert.ok(r)
-//     assert.equal(r, 20)
-// 
-//     b.source({bob: 30})
-//     assert.equal(bob.resolve(), 30)
-// 
-// 
-//     // test setting stuff
-//     b.henry = 40
-//     b.ugly = "ugly"
-// 
-//     // now, when I resolve b, it should resolve all of those, don't you think?
-//     // only if I force them to resolve too
-//     // I can't get the result of them, but they ARE created. 
-// 
-//     // I mean, b could keep track of them. 
-// 
-//     // and what about function invocations
-// 
-//     b.charlie() // means to call charlie!, well, kind of. I don't have to do it right away
-// 
-//     // it means to call charlie once everything goes down
-//     // And I don't really want to make a binding system. It only needs to fire ... when the source is set, once. 
-// 
-//     // So, instead, I could make it the opposite
-//     // when you call .source, all of them fire at once, and update their values, or set their stuff
-//     // they'd have to fire IN ORDER though
-// 
-//     // So, when .source() is called, go through your child bindings and call all of them
-//     // its pretty simple, that way
-// 
-//     s.resolve()
-//     console.log(b.resolve())
-//     // assert.equal(b.resolve().henry, 40)
-// 
-// 
-// 
-//     assert.finish()
-// }
-// 
-// return
-// 
-// exports.simple = function(assert) {
-// 
-//     var db = makeFakeDb({bob:{name:"bob"}})
-// 
-//     // as makes a block of async actions, that run in sequence
-//     var actions = as(db, function(db) {
-//         var bob = db.fetch("bob")
-//         bob.mood = "angry"
-//         db.save(bob)
-// 
-//         return db.fetch("bob")
-//     })
-// 
-//     // you can pass them a callback
-//     actions(function(err, bob) {
-//         assert.equal(bob.name, "bob", "Bob was not bob: " + bob.name)
-//         assert.equal(bob.mood, "angry")
-//         assert.finish()
+//                     done(null, entities)
+//                 })
+//             })
+//         })
 //     })
 // }
-// 
-// 
-// // exports.assumeSequenceBreaks = function(assert) {
-// // 
-// //     // You can't assume sequence, because how does it know you've finished with your function?
-// //     // You can't put the burden on the user. He'll forget
-// //     // So, assuming sequence is dangerous
-// // 
-// //     // Ooh, so the queue is defined for that block
-// //     // we process.nextTick everything so nothing can resolve during the block, it just creates an array of promises
-// //     // then we execute away!
-// // 
-// //     var db = makeFakeDb({bob:{name:"bob"}})
-// // 
-// //     // makes a function you can call at ANY time. 
-// //     // accepts params, along with an invisible one (a callback)
-// //     var actions = makeDo(assert, db, function(assert, db) {
-// //         var bob = db.fetch("bob")
-// //         bob.mood = "angry"
-// //         db.save(bob)
-// // 
-// //         var bob = db.fetch("bob")
-// //         var last = assert.equal(bob.name, "bob", "Bob was not bob: " + bob.name)
-// // 
-// //         assert.equal(bob.mood, "angry")
-// //     })
-// // 
-// //     actions(assert.finish)
-// // 
-// //     // knows it is a do function // so you don't have to use do() inside of it
-// //     // automatically does it on each of its parameters
-// // 
-// //     // You would have to have called makeDo on any globals before-hand
-// // 
-// //     // this passes an error to the caller, but what about the above? 
-// //     // we'll need an error handler somewhere. Well, assert.finish() is unique, usually
-// //     // wait, it's easy, isn't it? 
-// //     // You'd call cb with the param?
-// // 
-// //     // No, it needs to know how to handle errors
-// // 
-// //     // But I think this should be the standard syntax
-// // 
-// //     var runTest = do(function(assert, db) {
-// //         var bob = db.fetch("bob")
-// //         bob.mood = "angry"
-// //         db.save(bob)
-// // 
-// //         var bob = db.fetch("bob")
-// //         var last = assert.equal(bob.name, "bob", "Bob was not bob: " + bob.name)
-// // 
-// //         assert.equal(bob.mood, "angry")
-// //         return true
-// //     })
-// // 
-// //     runTest(assert, db, function(err, lastResult) {
-// //         assert.ifError(err)
-// //         assert.finish()
-// //     })
-// // }
-// // 
-// // // any globals must already be doified
-// // var db = makeFakeDb({bob:{name:"bob"}})
-// // 
-// // exports.doifiedTest = makeDo(db, function(db, assert) {
-// //     var bob = db.fetch("bob")
-// //     bob.mood = "angry"
-// //     db.save(bob)
-// // 
-// //     var bob = db.fetch("bob")
-// //     var last = assert.equal(bob.name, "bob", "Bob was not bob: " + bob.name)
-// // 
-// //     assert.equal(bob.mood, "angry")
-// //     assert.finish()
-// // })
-// 
