@@ -213,6 +213,17 @@ Promise.Normal = (action, args) -> # calls the passed in function
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 # HELPERS #
 # If a function, makes sure it is bound to object
 ensureBoundFunction = (p, value) ->
@@ -250,14 +261,12 @@ inspectPromiseNoValue = (p) ->
         when "NORMAL" then if p.action? then out += inspectFunction p.action, p.args
         when "GET" then out += "." + p.property
         when "CALL" then out += "(" + inspectArgs(p.args) + ")"
-        else out += " ??"
+        when "SET" then out += "." + p.property + " = " + p.setTo
+        else throw new Error "Unknown p.type"
 
     out
 
-    # else if p.action? then inspectFunction p.action, p.args
-    # else "??"
-
-
+ 
 
 
 
