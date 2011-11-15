@@ -77,20 +77,15 @@ runPromise = (p, cb) ->
     # If return is called, throw an error
 
     finished = false
-
-    p.args.push (err, result) ->
-        if finished then throw new Error "Promise both returned and called back"
+    callback = (err, result) ->
+        if finished then throw new Error "Promise both returned and called back, or called back twice"
         finished = true
         p.done result
-        cb err, result
-        
-    ret = p.action.apply null, p.args.map promiseValue
+        process.nextTick -> cb err, result
 
-    if ret? 
-        if finished then throw new Error "Promise both returned and called back"
-        finished = true
-        p.done ret
-        process.nextTick -> cb null, ret
+    p.args.push callback
+    ret = p.action.apply p, p.args.map promiseValue
+    if ret? then callback null, ret
 
 promiseValue = (p) -> 
     # if it is a promise, then return
@@ -147,30 +142,26 @@ class Promise
         @args = args || []
         @val = null
         @parallel = false
-    p: -> 
-        @parallel = true
-        this
+    p: -> @parallel = true; this
     done: (v) -> @val = v
     value: -> @val
     inspect: -> "{ Promise #{@action.toString().replace(/function\s*(.*?)\s*\{[\s\S]+/, "$1")} (#{@args.join(',')}) = #{@val} #{if @parallel then 'p' else ''}}"
     isPromise: true
 
-class Binding
+class Binding extends Promise
     constructor: (parent, getValue) ->
         @parent = parent
         @val = null
         @args = []
         @getValue = getValue
-        @action = (cb) =>
-            parentValue = parent.value()
-            if parentValue? then @val = getValue parentValue else null
-            cb()
-            return undefined # so it isn't treated as a return 
-    done: ->
-    value: -> @val
+        @action = @run
+    done: -> # ignore done, the value isn't correct
     inspect: -> "{ Binding #{@parent.value()} #{@val}}"
-    isPromise: true
-
+    run: (cb) -> 
+        parentValue = @parent.value()
+        if parentValue? then @val = @getValue parentValue else null
+        cb()
+        return undefined # so it isn't treated as a return 
 
 
 # HELPERS #
