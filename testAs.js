@@ -43,7 +43,6 @@ function makeWriter() {
 var cs = require("coffee-script")
 var as = require("./")
 
-
 exports.simpleSteps = function(assert) {
 
     var num = 0
@@ -303,13 +302,31 @@ exports.readFromDbSetPropThenSaveThenRead = function(assert) {
     })
 }
 
-// exports.errors = function(assert) {
-//     assert.ok(false, "Make sure you catch errors and escape early")
-//     assert.finish()
+exports.errors = function(assert) {
+
+    function giveError(cb) {
+        process.nextTick(function() {
+            cb(new Error("OH NO"), "result")
+        })
+    }
+
+    var actions = as(giveError, function(giveError) {
+        var obj = giveError()
+        obj.something = "hi" // this also tests that you can set on a null value
+        return obj
+    })
+
+    actions(function(err, val) {
+        assert.ok(err)
+        assert.ok(!val)
+        assert.finish()
+    })
+}
+
+// exports.setSomethingToAPromise = function(assert) {
+//     assert.ok(false, "Make sure you set something to the result of a promise")
 // }
 // 
-
-
 // exports.convertEntireModules = function(assert) {
 //     assert.ok(false, "Todo")
 //     assert.finish()

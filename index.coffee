@@ -13,9 +13,10 @@ as = module.exports = (objects..., actions) ->
     ret = actions.apply(null, objects.map(mappedFunctions))
 
     return (cb) ->
-        runPromises ps.concat(), -> 
+        runPromises ps.concat(), (err) -> 
             # console.log("RETURNING", ret, ret.value())
-            cb(null, promiseValue ret)
+            if err then return cb err
+            cb null, promiseValue ret
 
 # function that creates a promise to do f
 functionToPromiser = (queue, f) ->
@@ -32,10 +33,10 @@ runPromises = (ps, cb) ->
         runParallel parallels, cb
         parallels = []
         
-    next = ->
-        p = ps.shift()
+    next = (err) ->
+        if err then return cb err
 
-        # console.log("Next Promise", p)
+        p = ps.shift()
 
         if not p? 
             return flushParallels cb
@@ -44,7 +45,9 @@ runPromises = (ps, cb) ->
             parallels.push p
             return next()
 
-        flushParallels -> runPromise p, next
+        flushParallels (err) -> 
+            if err then return cb err
+            runPromise p, next
 
     next()
 
@@ -53,7 +56,8 @@ runParallel = (ps, cb) ->
     if ps.length == 0 then return cb()
     remaining = ps.length
     ps.forEach (p) -> 
-        runPromise p, ->
+        runPromise p, (err) ->
+            if (err) then return cb err
             if --remaining == 0
                 cb()
 
@@ -90,38 +94,18 @@ as.promise = promise = (action, args) ->
     makeProxy new Promise action, args
 
 makeProxy = (p) ->
-    handler = {
+    handler =
         get: (r, n) -> 
-            # console.log "GET" + n + " "  + (p[n]?)
-            if p[n]? || p.hasOwnProperty(n)
-                # console.log("GETTING VALUE "+n)
-                value = p[n]
-                if value instanceof Function 
-                    value = value.bind p
-                return value
+            if p[n]? then ensureBoundFunction p, p[n]
+            else makeProxy withValue p, (val) -> val[n]
 
-            else 
-                makeProxy {
-                    value: -> 
-                        val = p.value()
-                        if val? then val[n] else null
-                } 
+        set: (r, n, v) -> p.on 'done', (val) -> 
+            if val? then val[n] = v
 
-        set: (r, n, v) ->
-            # console.log "SET" + r + n + v
-            p.on 'done', (val) -> 
-                val[n] = v
-
-        call: (r) ->
-            # console.log "CALLED", r
-            makeProxy {
-                value: -> 
-                    val = p.value()
-                    if val? then val() else null
-            }
-    }
+        call: (r) -> makeProxy withValue p, (val) -> val()
 
     proxy = Proxy.createFunction handler, handler.call
+
 
 class Promise extends events.EventEmitter
     constructor: (action, args) -> 
@@ -145,6 +129,24 @@ class Promise extends events.EventEmitter
 
 
 
+
+
+
+# HELPERS #
+
+# return an object with a value function defined by f
+# automatically handles nulls
+withValue = (p, f) -> { 
+    value: -> 
+        val = p.value() 
+        if val? then f val else null
+}
+
+# If a function, makes sure it is bound to object
+ensureBoundFunction = (p, value) ->
+    if value instanceof Function 
+        value = value.bind p
+    return value
 
 
 
