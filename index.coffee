@@ -20,9 +20,10 @@ as = module.exports = (objects..., actions) ->
 
     return (cb) ->
         runPromises ps.concat(), (err) -> 
-            # console.log "DONE RUN", ret, ret.value
+            # console.log "DONE RUN", err, ret
             if err then return cb err
             cb null, promiseValue ret
+        return undefined # otherwise we can't chain them together
 
 as.convert = convert = (obj) ->
     if typeof obj == "function"
@@ -81,14 +82,14 @@ runPromise = (p, cb) ->
     # this function set up both a callback AND checks for the return. It shouldn't do both
     # If return is called, throw an error
 
-    console.log "RUN PROMISE", p
+    # console.log "RUN PROMISE", p
 
     finished = false
     callback = (err, result) ->
         if finished then throw new Error "Promise both returned and called back, or called back twice"
         finished = true
         p.value = result
-        console.log "RAN PROMISE", p, result
+        # console.log "RAN PROMISE", p
         process.nextTick -> cb err
     callback.inspect = -> "" # so it won't show up in traces
 

@@ -424,6 +424,48 @@ exports.convertModulesOutside = function(assert) {
 */
 
 
+exports.nestedPromiseBlocks = function(assert) {
+
+    var valueToReturn = 0
+    function getValue(cb) {
+        process.nextTick(function() {
+            cb(null, valueToReturn)
+        })
+    }
+
+    function setValue(val, cb) {
+        process.nextTick(function() {
+            valueToReturn = val
+            cb()
+        })
+    }
+
+    var getSeveralValues = as(getValue, function(getValue) {
+        var values = {}
+        values.one = getValue()
+        values.two = getValue()
+        return values
+    })
+
+
+    var actions = as(getSeveralValues, setValue, getValue, function(getSeveralValues, setValue, getValue) {
+        setValue(20)
+        var values = getSeveralValues()
+        return values
+    })
+
+    actions(function(err, value) {
+        assert.ifError(err)
+        assert.deepEqual(value, {one: 20, two: 20})
+        assert.finish()
+    })
+
+    
+}
+
+return
+
+
 exports.getExtraDataForEachItem = function(assert) {
 
     function getDocs(cb) {
@@ -438,20 +480,78 @@ exports.getExtraDataForEachItem = function(assert) {
         })
     }
 
-    var actions = as(getDocs, getTagsForDoc, function(getDocs, getTagsForDoc) {
+    function asyncForEach(vs, f, cb) {
+        // run them all in sequence
+        vs = vs.concat()
+        function next() {
+            var v = vs.shift()
+            if (!v) {
+                return cb()
+            }
+            f(v, next) // this has to be async as well, no? 
+        }
+        next()
+    }
+
+    function setTagsForDoc(doc, cb) {
+        getTagsForDoc(doc, function(err, tags) {
+            if (err) return cb(err)
+            doc.tags = tags
+            cb()
+        })
+    }
+
+    var actions = as(getDocs, getTagsForDoc, asyncForEach, function(getDocs, getTagsForDoc, asyncForEach) {
         var docs = getDocs()
 
-        var ids = docs.map(function(doc) {
-            console.log("MAPPING", doc)
-            return doc.id
+        // var ids = docs.map(function(doc) {
+        //     console.log("MAPPING", doc)
+        //     return doc.id
+        // })
+
+        // var docsWithTags = docs.forEach(function(doc) {
+        //     console.log("UMMM", getTagsForDoc(doc))
+        //     doc.tags = getTagsForDoc(doc)
+        // })
+
+        // asyncForEach(docs, setTagsForDoc)
+
+        // If I could create a magic promise as a result of a call to forEach
+        // that represents the fact that I'll make/insert more
+        // Magic promises have their own promises
+        // when run, they generate a bunch of promises, then run those
+        // Yay!
+        // Ok, if I can get it so that promises generate when it hits a certain step, then it runs all of them
+        // "Run all of them" is the same as just calling an async function, isn't it?
+        // So I don't have to interface in a fancy way, I just have to create a function call that has an async
+        // signature, and runs its own promises instead
+
+        as(function() {
+
         })
 
-        var docsWithTags = docs.map(function(doc) {
-            doc.tags = getTagsForDoc(doc)
-            return doc
-        })
+        // 1 // I could implement forEach and map by hand
+            // a function that takes a promise doc
+            // and um,, I don't know :)
+            // kind of hard. 
+            // is it parallel or sequence? Either way, it shouldn't move to the next loop unless the loop registers as done?
+            // No, it should create a bunch of promises, for the whole loop
+            // either way, its' going to be hard. Have to create a second thing
 
-        return docsWithTags
+            // so, I need a way to create a bunch of sub-promises
+            // well, if I could create an async function, like: 
+            // yeah, try to implement by hand first
+
+        // 2 // Right before calling, I could create a new queue, etc
+            // I am creating promises already for getTagsForDoc
+            // doc is resolved
+            // so doc.tags is currently set to a promise
+            // I just need to run them all
+            // it's bad that doc is resolved, because it sets immediately
+            // So, I'd need to have doc be the promise for doc, not the resolved version
+            // might be easier to implement by hand, try that first
+
+        return docs
     })
 
     actions(function(err, val) {
