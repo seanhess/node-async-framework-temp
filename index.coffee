@@ -4,13 +4,18 @@ Proxy = require 'node-proxy'
 common = require './common'
 events = require 'events'
 
+# We use a global queue to track promises being created
+# since promise creation always occurs in a single run of the event loop, it works
+currentPromises = []
+
 as = module.exports = (objects..., actions) ->
     # step 1, create a function, that returns magic objects for each object
     # actions.apply(null, objects.map(objPromise))
 
-    ps = []
-    mappedFunctions = functionToPromiser.partial ps
-    ret = actions.apply(null, objects.map(mappedFunctions))
+    currentPromises = []
+    ret = actions.apply null, objects.map functionToPromiser
+    ps = currentPromises
+    currentPromises = []
 
     return (cb) ->
         runPromises ps.concat(), (err) -> 
@@ -19,14 +24,14 @@ as = module.exports = (objects..., actions) ->
             cb null, promiseValue ret
 
 # function that creates a promise to do f
-functionToPromiser = (queue, f) ->
+functionToPromiser = (f) ->
     return (args...) -> 
         p = promise f, args
-        queue.push p
+        currentPromises.push p
         p
 
 runPromises = (ps, cb) ->
-    # console.log("RUN PROMiSES", ps)
+    console.log("RUN PROMiSES", ps)
     parallels = []
 
     flushParallels = (cb) ->
@@ -76,11 +81,11 @@ runPromise = (p, cb) ->
 
 promiseValue = (p) -> 
     # if it is a promise, then return
-    if p? and p.value? then return p.value()
+    if p? and p.isPromise then return p.value()
 
     # if it is an object, support a single level of nesting
     for prop, val of p
-        if val.value? then p[prop] = val.value()
+        if val.isPromise then p[prop] = val.value()
 
     p
 
@@ -97,19 +102,30 @@ makeProxy = (p) ->
     handler =
         get: (r, n) -> 
             if p[n]? then ensureBoundFunction p, p[n]
-            else makeProxy withValue p, (val) -> val[n]
+            else makeProxy new Binding p, (val) -> val[n]
 
-        set: (r, n, v) -> p.on 'done', (val) -> 
-            if val? then val[n] = v
+        # return a promise to set stuff
+        # hmm, it might be easier to do get/call this way too
+        # except that if they're not used, they won't even be executed :)
+        set: (r, n, v) -> 
+            currentPromises.push new Promise ->
+                dest = p.value()
+                if not dest? then return null
 
-        call: (r) -> makeProxy withValue p, (val) -> val()
+                if v.isPromise
+                    v = v.value()
+
+                dest[n] = v
+
+
+        call: (r) -> makeProxy new Binding p, (val) -> val()
 
     proxy = Proxy.createFunction handler, handler.call
 
 
 class Promise extends events.EventEmitter
     constructor: (action, args) -> 
-        @action = action
+        @action = action || ->
         @args = args || []
         @val = null
         @parallel = false
@@ -120,28 +136,21 @@ class Promise extends events.EventEmitter
         @val = v
         @emit 'done', v
     value: -> @val
-    inspect: -> "[Promise action:#{@action.toString().replace(/\ *{[\s\S]*/, '')} args:#{@args} value:#{@val} #{if @parallel then 'p' else ''}]"
+    inspect: -> "{ Promise #{@action.toString().replace(/function\s*(.*?)\s*\{[\s\S]+/, "$1")} (#{@args.join(',')}) = #{@val} #{if @parallel then 'p' else ''}}"
+    isPromise: true
 
-
-
-
-
-
-
-
+class Binding extends events.EventEmitter
+    constructor: (parent, getValue) ->
+        @parent = parent
+        @value = ->
+            val = parent.value()
+            if val? then getValue val else null
+    inspect: -> "[Binding]"
+    isPromise: true
 
 
 
 # HELPERS #
-
-# return an object with a value function defined by f
-# automatically handles nulls
-withValue = (p, f) -> { 
-    value: -> 
-        val = p.value() 
-        if val? then f val else null
-}
-
 # If a function, makes sure it is bound to object
 ensureBoundFunction = (p, value) ->
     if value instanceof Function 

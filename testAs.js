@@ -43,6 +43,7 @@ function makeWriter() {
 var cs = require("coffee-script")
 var as = require("./")
 
+/*
 exports.simpleSteps = function(assert) {
 
     var num = 0
@@ -302,6 +303,7 @@ exports.readFromDbSetPropThenSaveThenRead = function(assert) {
     })
 }
 
+
 exports.errors = function(assert) {
 
     function giveError(cb) {
@@ -323,10 +325,30 @@ exports.errors = function(assert) {
     })
 }
 
-// exports.setSomethingToAPromise = function(assert) {
-//     assert.ok(false, "Make sure you set something to the result of a promise")
-// }
-// 
+*/
+
+exports.setSomethingToAPromise = function(assert) {
+    var db = makeFakeDb({
+        bob:{name:"bob"},
+        jill:{name:"jill"}
+    })
+
+    var actions = as(db.fetch, db.save, function(fetch, save) {
+        var bob = fetch("bob")
+        var jill = fetch("jill")
+        bob.name = jill.name
+        save("bob", bob)
+        return fetch("bob")
+    })
+
+    actions(function(err, val) {
+        assert.ifError(err)
+        assert.deepEqual(val, {name:"jill"})
+        assert.finish()
+    })
+}
+
+
 // exports.convertEntireModules = function(assert) {
 //     assert.ok(false, "Todo")
 //     assert.finish()
