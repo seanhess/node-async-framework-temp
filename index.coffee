@@ -1,8 +1,6 @@
 
 
 Proxy = require 'node-proxy'
-common = require './common'
-events = require 'events'
 
 # We use a global queue to track promises being created
 # since promise creation always occurs in a single run of the event loop, it works
@@ -143,7 +141,7 @@ makeProxy = (p) ->
     proxy = Proxy.createFunction handler, handler.call
 
 
-class Promise extends events.EventEmitter
+class Promise
     constructor: (action, args) -> 
         @action = action || ->
         @args = args || []
@@ -152,14 +150,12 @@ class Promise extends events.EventEmitter
     p: -> 
         @parallel = true
         this
-    done: (v) -> 
-        @val = v
-        @emit 'done', v
+    done: (v) -> @val = v
     value: -> @val
     inspect: -> "{ Promise #{@action.toString().replace(/function\s*(.*?)\s*\{[\s\S]+/, "$1")} (#{@args.join(',')}) = #{@val} #{if @parallel then 'p' else ''}}"
     isPromise: true
 
-class Binding extends events.EventEmitter
+class Binding
     constructor: (parent, getValue) ->
         @parent = parent
         @val = null
