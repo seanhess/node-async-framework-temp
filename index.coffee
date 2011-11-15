@@ -12,6 +12,8 @@ as = module.exports = (objects..., actions) ->
     # step 1, create a function, that returns magic objects for each object
     # actions.apply(null, objects.map(objPromise))
 
+
+    # while the function runs, all created promises go into our queue (globally)
     currentPromises = []
     ret = actions.apply null, objects.map functionToPromiser
     ps = currentPromises
@@ -31,7 +33,7 @@ functionToPromiser = (f) ->
         p
 
 runPromises = (ps, cb) ->
-    console.log("RUN PROMiSES", ps)
+    # console.log("RUN PROMiSES", ps)
     parallels = []
 
     flushParallels = (cb) ->

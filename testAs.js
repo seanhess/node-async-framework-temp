@@ -43,7 +43,6 @@ function makeWriter() {
 var cs = require("coffee-script")
 var as = require("./")
 
-/*
 exports.simpleSteps = function(assert) {
 
     var num = 0
@@ -324,8 +323,6 @@ exports.errors = function(assert) {
         assert.finish()
     })
 }
-
-*/
 
 exports.setSomethingToAPromise = function(assert) {
     var db = makeFakeDb({
