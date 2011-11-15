@@ -45,6 +45,9 @@ function makeWriter() {
 var cs = require("coffee-script")
 var as = require("./index.js")
 
+
+/*
+
 exports.simpleSteps = function(assert) {
 
     var num = 0
@@ -418,8 +421,7 @@ exports.convertModulesOutside = function(assert) {
     })
 }
 
-
-return
+*/
 
 
 exports.getExtraDataForEachItem = function(assert) {
@@ -439,33 +441,22 @@ exports.getExtraDataForEachItem = function(assert) {
     var actions = as(getDocs, getTagsForDoc, function(getDocs, getTagsForDoc) {
         var docs = getDocs()
 
-        // didn't work because the set command was not registered as a promise
-        // since forEach is a promise itself, it isn't executed in time to go in the queue
-        // So, the inner thing is executed in constant time
-
-        // Ah, and I didn't make CALL and GET be promises
-        // So setting functions won't work. K, need to make that change
-
-        var res = docs.map(function(doc) {
-            return 3
+        var ids = docs.map(function(doc) {
+            console.log("MAPPING", doc)
+            return doc.id
         })
 
-        console.log("Res?", res)
-        //     // doc.tags = getTagsForDoc(doc)
-        //     // console.log("DONE")
-        // })
+        var docsWithTags = docs.map(function(doc) {
+            doc.tags = getTagsForDoc(doc)
+            return doc
+        })
 
-        // console.log("OK", res)
-
-        // But then it would convert it to a promise, no?
-        // I'm not sure what it would do
-
-        return res
+        return docsWithTags
     })
 
     actions(function(err, val) {
         assert.ifError(err)
-        assert.deepEqual(val, {id:1, tags:["a","b","c"]})
+        assert.deepEqual(val[0], {id:1, tags:["a","b","c"]})
         assert.finish()
     })
 
@@ -496,10 +487,10 @@ exports.getExtraDataForEachItem = function(assert) {
 //     assert.finish()
 // }
 
-exports.oneBigPromise = function(assert) {
-    assert.ok(false, "while the result of as is a function, it should also be a promise you could include in another one, or print out ")
-    assert.finish()
-}
+// exports.oneBigPromise = function(assert) {
+//     assert.ok(false, "while the result of as is a function, it should also be a promise you could include in another one, or print out ")
+//     assert.finish()
+// }
 
 // Scores.getScores(function(err, defaults, scores) {
 //     if (err) return res.send(err)

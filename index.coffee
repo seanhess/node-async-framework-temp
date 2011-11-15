@@ -81,14 +81,14 @@ runPromise = (p, cb) ->
     # this function set up both a callback AND checks for the return. It shouldn't do both
     # If return is called, throw an error
 
-    # console.log "RUN PROMISE", p
+    console.log "RUN PROMISE", p
 
     finished = false
     callback = (err, result) ->
         if finished then throw new Error "Promise both returned and called back, or called back twice"
         finished = true
         p.value = result
-        # console.log "RAN PROMISE", p, result, p.value, promiseValue p
+        console.log "RAN PROMISE", p, result
         process.nextTick -> cb err
     callback.inspect = -> "" # so it won't show up in traces
 
@@ -105,7 +105,7 @@ runPromise = (p, cb) ->
         ret = switch p.type
             when "GET" then parentValue[p.property] 
             when "SET" then parentValue[p.property] = promiseValue p.setTo
-            when "CALL" then parentValue.apply p.parent, p.args
+            when "CALL" then parentValue.apply p.parent.parent.value, p.args # you have to apply two-levels in, the immediate parent is the function wrapper itself
             else throw new Error "Bad Promise Type"
 
         callback null, ret
