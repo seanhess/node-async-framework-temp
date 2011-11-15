@@ -36,7 +36,7 @@ as.convert = convert = (obj) ->
 
 
 runPromises = (ps, cb) ->
-    # console.log("RUN PROMiSES", ps)
+    console.log("RUN PROMiSES", ps)
     parallels = []
 
     flushParallels = (cb) ->
@@ -71,7 +71,7 @@ runParallel = (ps, cb) ->
                 cb()
 
 runPromise = (p, cb) ->
-    # console.log "Run Promise", p
+    console.log "Run Promise", p
 
     # this function set up both a callback AND checks for the return. It shouldn't do both
     # If return is called, throw an error
@@ -82,6 +82,7 @@ runPromise = (p, cb) ->
         finished = true
         p.done result
         process.nextTick -> cb err, result
+    callback.inspect = -> "" # so it won't show up in traces
 
     p.args.push callback
     ret = p.action.apply p, p.args.map promiseValue
@@ -145,7 +146,8 @@ class Promise
     p: -> @parallel = true; this
     done: (v) -> @val = v
     value: -> @val
-    inspect: -> "{ Promise #{@action.toString().replace(/function\s*(.*?)\s*\{[\s\S]+/, "$1")} (#{@args.join(',')}) = #{@val} #{if @parallel then 'p' else ''}}"
+    inspect: -> inspectFunction @action, @args
+        
     isPromise: true
 
 class Binding extends Promise
@@ -171,10 +173,17 @@ ensureBoundFunction = (p, value) ->
         value = value.bind p
     return value
 
+inspectArgs = (args) ->
+    mapped = args.map (arg) ->
+        if arg.inspect? 
+            arg.inspect() 
+        else if typeof arg == 'function'
+            inspectFunction arg, []
+        else arg
+    mapped.join ','
 
-
-
-
+inspectFunction = (f, args) ->
+    f.toString().replace(/function\s*(\w*).*?\s*\{[\s\S]+/, "$1") + "(" + inspectArgs(args) + ")"
 
 
 
