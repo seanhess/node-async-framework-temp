@@ -1,0 +1,29 @@
+{
+  "name": "as",
+  "description": "magic sync-like mode for async operations",
+  "version": "0.0.1",
+  "author": "Sean Hess <seanhess@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "bugs": {
+    "email": "seanhess@gmail.com",
+    "url": ""
+  },
+  "main": "index",
+  "keywords": [
+    "mongodb"
+  ],
+  "engines": {
+    "node": "0.4.x"
+  },
+  "dependencies": {
+    "async_testing": "0.3.2",
+    "coffee-script": "1.1.3",
+    "node-proxy": "0.5.2"
+  },
+  "directories": {
+    "lib": "lib"
+  }
+}
