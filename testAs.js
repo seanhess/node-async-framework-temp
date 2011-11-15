@@ -43,6 +43,7 @@ function makeWriter() {
 var cs = require("coffee-script")
 var as = require("./")
 
+
 exports.simpleSteps = function(assert) {
 
     var num = 0
@@ -88,6 +89,7 @@ exports.asyncSteps = function(assert) {
     })
 }
 
+
 exports.parallelSteps = function(assert) {
 
     var write = makeWriter()
@@ -107,6 +109,7 @@ exports.parallelSteps = function(assert) {
     })
 
 }
+
 
 exports.parallelThenSequence = function(assert) {
 
@@ -179,7 +182,7 @@ exports.passingValues = function(assert) {
         var current = two
 
         // use case: I want to get a bunch of stuff async and get it into an array
-        for (var i = 0; i < 100; i ++)
+        for (var i = 0; i < 10; i ++)
             current = add1(two).p()
 
         return add1(add1(current))
@@ -191,6 +194,7 @@ exports.passingValues = function(assert) {
         assert.finish()
     })
 }
+
 
 // right now, you couldn't do that, but you could do: renderScores(req, scores, blah, blah)
 exports.nestedObjects = function(assert) {
@@ -216,6 +220,8 @@ exports.nestedObjects = function(assert) {
     })
 }
 
+
+
 exports.accessSubPropertyOfPromise = function(assert) {
 
     // pretend this is something async
@@ -234,9 +240,13 @@ exports.accessSubPropertyOfPromise = function(assert) {
         assert.ifError(err)
         assert.equal(val, "bob")
         assert.finish()
+        assert.finish = function() {
+            throw new Error("called finish twice")
+        }
     })
 
 }
+
 
 // try an async and sync sub-function
 exports.accessSubFunctionOfPromise = function(assert) {
@@ -261,6 +271,7 @@ exports.accessSubFunctionOfPromise = function(assert) {
         assert.finish()
     })
 }
+
 
 exports.nullTolerantGets = function(assert) {
     function getData(cb) {
@@ -324,6 +335,7 @@ exports.errors = function(assert) {
     })
 }
 
+
 exports.setSomethingToAPromise = function(assert) {
     var db = makeFakeDb({
         bob:{name:"bob"},
@@ -367,23 +379,75 @@ exports.convertModulesOutside = function(assert) {
         return dba.fetch("bob")
     })
 
+    var sameTime = as(function() {
+        dba.save("henry", {name:"henry"})
+        return dba.fetch("henry")
+    })
+
     actions(function(err, val) {
         assert.ifError(err)
         assert.deepEqual(val, {name:"bob"})
-        assert.finish()
+
+        process.nextTick(function() {
+            assert.finish()
+        })
+    })
+
+    // for kicks, make sure the global promise queue is working without overwriting the other one
+    sameTime(function(err, val) {
+        assert.deepEqual(val, {name:"henry"})
     })
 }
 
-// exports.getExtraDataForEachItem = function(assert) {
-// 
-//     // var docs = getDocs() // id, name
-//     // var tags = getTagsForDocs() // tag, then attach to each one
-//     // return { id: [tag], etc }
-//     
-//     assert.ok(false, "Create a new object with keys for each one?")
-//     assert.finish()
-// }
-// 
+
+
+return
+
+exports.getExtraDataForEachItem = function(assert) {
+
+    function getDocs(cb) {
+        process.nextTick(function() {
+            cb(null, [{id:1},{id:2}])
+        })
+    }
+
+    function getTagsForDoc(doc, cb) {
+        process.nextTick(function() {
+            cb(null, ["a","b","c"])
+        })
+    }
+
+    var actions = as(getDocs, getTagsForDoc, function(getDocs, getTagsForDoc) {
+        var docs = getDocs()
+
+        // didn't work because the set command was not registered as a promise
+        // since forEach is a promise itself, it isn't executed in time to go in the queue
+        // So, the inner thing is executed in constant time
+
+        // Ah, and I didn't make CALL and GET be promises
+        // So setting functions won't work. K, need to make that change
+        docs.forEach(function(doc) {
+            console.log("FOR EACHING IT UP!")
+            doc.tags = getTagsForDoc(doc)
+            console.log("DONE")
+        })
+
+        // But then it would convert it to a promise, no?
+        // I'm not sure what it would do
+
+        return docs
+    })
+
+    actions(function(err, val) {
+        assert.ifError(err)
+        assert.ok(val)
+        assert.ok(val.length)
+        assert.deepEqual(val[0], {id:1, tags:["a","b","c"]})
+        assert.finish()
+    })
+
+}
+
 // exports.conditionalEscaping = function(assert) {
 //     assert.ok(false, "If you get nothing back from a db, return early")
 //     assert.finish()
@@ -445,3 +509,4 @@ exports.convertModulesOutside = function(assert) {
 //         })
 //     })
 // }
+

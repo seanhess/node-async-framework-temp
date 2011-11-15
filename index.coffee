@@ -12,7 +12,6 @@ as = module.exports = (objects..., actions) ->
     # step 1, create a function, that returns magic objects for each object
     # actions.apply(null, objects.map(objPromise))
 
-
     # while the function runs, all created promises go into our queue (globally)
     currentPromises = []
     ret = actions.apply null, objects.map convert
@@ -21,7 +20,6 @@ as = module.exports = (objects..., actions) ->
 
     return (cb) ->
         runPromises ps.concat(), (err) -> 
-            # console.log("RETURNING", ret, ret.value())
             if err then return cb err
             cb null, promiseValue ret
 
@@ -66,7 +64,6 @@ runPromises = (ps, cb) ->
     next()
 
 runParallel = (ps, cb) ->
-    # console.log "RUN PARALLEL", ps
     if ps.length == 0 then return cb()
     remaining = ps.length
     ps.forEach (p) -> 
@@ -78,13 +75,22 @@ runParallel = (ps, cb) ->
 runPromise = (p, cb) ->
     # console.log "Run Promise", p
 
+    # this function set up both a callback AND checks for the return. It shouldn't do both
+    # If return is called, throw an error
+
+    finished = false
+
     p.args.push (err, result) ->
+        if finished then throw new Error "Promise both returned and called back"
+        finished = true
         p.done result
         cb err, result
         
     ret = p.action.apply null, p.args.map promiseValue
 
     if ret? 
+        if finished then throw new Error "Promise both returned and called back"
+        finished = true
         p.done ret
         process.nextTick -> cb null, ret
 
@@ -111,7 +117,10 @@ makeProxy = (p) ->
     handler =
         get: (r, n) -> 
             if p[n]? then ensureBoundFunction p, p[n]
-            else makeProxy new Binding p, (val) -> val[n]
+            else 
+                binding = new Binding p, (val) -> val[n]
+                currentPromises.push binding
+                makeProxy binding
 
         # return a promise to set stuff
         # hmm, it might be easier to do get/call this way too
@@ -126,8 +135,10 @@ makeProxy = (p) ->
 
                 dest[n] = v
 
-
-        call: (r) -> makeProxy new Binding p, (val) -> val()
+        call: (r) -> 
+            binding = new Binding p, (val) -> val()
+            currentPromises.push binding
+            makeProxy binding
 
     proxy = Proxy.createFunction handler, handler.call
 
@@ -151,10 +162,17 @@ class Promise extends events.EventEmitter
 class Binding extends events.EventEmitter
     constructor: (parent, getValue) ->
         @parent = parent
-        @value = ->
-            val = parent.value()
-            if val? then getValue val else null
-    inspect: -> "[Binding]"
+        @val = null
+        @args = []
+        @getValue = getValue
+        @action = (cb) =>
+            parentValue = parent.value()
+            if parentValue? then @val = getValue parentValue else null
+            cb()
+            return undefined # so it isn't treated as a return 
+    done: ->
+    value: -> @val
+    inspect: -> "{ Binding #{@parent.value()} #{@val}}"
     isPromise: true
 
 
