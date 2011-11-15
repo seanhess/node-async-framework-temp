@@ -2,7 +2,7 @@
 
 Proxy = require 'node-proxy'
 common = require './common'
-sys = require 'sys'
+events = require 'events'
 
 as = module.exports = (objects..., actions) ->
     # step 1, create a function, that returns magic objects for each object
@@ -101,19 +101,29 @@ makeProxy = (p) ->
                 return value
 
             else 
-                makeProxy {value: -> p.value()[n]}
+                makeProxy {
+                    value: -> 
+                        val = p.value()
+                        if val? then val[n] else null
+                } 
 
         set: (r, n, v) ->
-            console.log "SET" + r + n + v
+            # console.log "SET" + r + n + v
+            p.on 'done', (val) -> 
+                val[n] = v
 
         call: (r) ->
-            console.log "CALLED", r
-            proxy
+            # console.log "CALLED", r
+            makeProxy {
+                value: -> 
+                    val = p.value()
+                    if val? then val() else null
+            }
     }
 
     proxy = Proxy.createFunction handler, handler.call
 
-class Promise
+class Promise extends events.EventEmitter
     constructor: (action, args) -> 
         @action = action
         @args = args || []
@@ -122,7 +132,9 @@ class Promise
     p: -> 
         @parallel = true
         this
-    done: (v) -> @val = v
+    done: (v) -> 
+        @val = v
+        @emit 'done', v
     value: -> @val
     inspect: -> "[Promise action:#{@action.toString().replace(/\ *{[\s\S]*/, '')} args:#{@args} value:#{@val} #{if @parallel then 'p' else ''}]"
 
