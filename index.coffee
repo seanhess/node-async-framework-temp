@@ -15,7 +15,7 @@ as = module.exports = (objects..., actions) ->
         oldCurrentPromises = currentPromises
         currentPromises = []
         creatingActions = true
-        ret = actions.apply null, objects.map(convert).concat(args)
+        ret = actions.apply null, objects.map(convert).concat(args.map(convertValue))
         ps = currentPromises
         currentPromises = oldCurrentPromises
         creatingActions = false
@@ -46,19 +46,24 @@ as = module.exports = (objects..., actions) ->
 as.convert = convert = (obj) ->
     if typeof obj == "function"
         return (args...) -> 
-            p = promise obj, args
+            p = Promise.Normal obj, args
             currentPromises.push p
-            p
+            makeProxy p
     else if typeof obj == "object"
         promiser = {}
         for key, value of obj
             promiser[key] = convert value
         promiser
-    else obj
+    else convertValue obj
+
+convertValue = (obj) ->
+    p = Promise.Value obj
+    currentPromises.push p
+    makeProxy p
 
 
 runPromises = (ps, cb) ->
-    # console.log("RUN PROMISES", ps)
+    console.log("RUN PROMISES", ps)
     parallels = []
 
     flushParallels = (cb) ->
@@ -125,6 +130,7 @@ runPromise = (p, cb) ->
             when "GET" then parentValue[p.property] 
             when "SET" then parentValue[p.property] = promiseValue p.setTo
             when "CALL" then parentValue.apply p.parent.parent.value, p.args # you have to apply two-levels in, the immediate parent is the function wrapper itself
+            when "VALUE" then p.value
             else throw new Error "Bad Promise Type"
 
         callback null, ret
@@ -148,14 +154,12 @@ promiseValue = (p) ->
 # Promises have to be a proxy, so you can get sub-values as promises
 # see if you can get that to work, and have previous tests pass
 
-as.promise = promise = (action, args) ->
-    makeProxy Promise.Normal action, args
-
 makeProxy = (p) ->
     handler =
         get: (r, n) -> 
             # console.log "GET", n
             if p[n]? then ensureBoundFunction p, p[n]
+            else if n == "forEach" then forEach p
             else 
                 getter = Promise.Getter p, n
                 currentPromises.push getter
@@ -166,6 +170,7 @@ makeProxy = (p) ->
         # hmm, it might be easier to do get/call this way too
         # except that if they're not used, they won't even be executed :)
         set: (r, n, v) -> 
+            # console.log "SETTER", n, v
             setter = Promise.Setter p, n, v
             currentPromises.push setter
 
@@ -230,6 +235,32 @@ Promise.Normal = (action, args) -> # calls the passed in function
     p.action = action
     p
 
+Promise.Value = (value) ->
+    p = new Promise()
+    p.type = "VALUE"
+    p.value = value
+    p
+
+
+
+forEach = (arrayPromise) ->
+    captureForEach = (f) ->
+        console.log "For Each", arrayPromise, f
+        pForEach arrayPromise, convert f
+
+# converted version of async for each
+asyncForEach = (vs, f, cb) ->
+    console.log "Async For Each"
+    vs = vs.concat()
+    next = (err) ->
+        if err? then return cb err
+        v = vs.shift()
+        if not v? then return cb()
+        f v, next
+    next()
+
+pForEach = as asyncForEach
+
 
 
 
@@ -281,6 +312,7 @@ inspectPromiseNoValue = (p) ->
         when "GET" then out += "." + p.property
         when "CALL" then out += "(" + inspectArgs(p.args) + ")"
         when "SET" then out += "." + p.property + " = " + p.setTo
+        when "VALUE" then out += "val"
         else throw new Error "Unknown p.type"
 
     out

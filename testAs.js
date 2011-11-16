@@ -477,6 +477,7 @@ exports.callActionsTwice = function(assert) {
 }
 
 
+
 // should be able to call other asyncified versions without un-escaping them
 exports.nestedPromiseBlocks = function(assert) {
 
@@ -521,8 +522,6 @@ exports.nestedPromiseBlocks = function(assert) {
     
 }
 
-return
-
 
 exports.getExtraDataForEachItem = function(assert) {
 
@@ -551,13 +550,30 @@ exports.getExtraDataForEachItem = function(assert) {
         next()
     }
 
-    function setTagsForDoc(doc, cb) {
-        getTagsForDoc(doc, function(err, tags) {
-            if (err) return cb(err)
-            doc.tags = tags
-            cb()
-        })
-    }
+    // function setTagsForDoc(doc, cb) {
+    //     getTagsForDoc(doc, function(err, tags) {
+    //         if (err) return cb(err)
+    //         doc.tags = tags
+    //         cb()
+    //     })
+    // }
+
+    // got to get this working first
+    var setTagsForDoc = as(getTagsForDoc, function(getTagsForDoc, doc) {
+        var tags = getTagsForDoc(doc)
+
+        // now doc is a promise, so it'll register this set
+        doc.tags = tags
+    })
+
+    var doc = {}
+    setTagsForDoc(doc, function(err, value) {
+        assert.ifError(err)
+        assert.deepEqual(doc, {tags:["a","b","c"]})
+        assert.finish()
+    })
+
+    return
 
     var actions = as(getDocs, getTagsForDoc, asyncForEach, function(getDocs, getTagsForDoc, asyncForEach) {
         var docs = getDocs()
@@ -572,7 +588,7 @@ exports.getExtraDataForEachItem = function(assert) {
         //     doc.tags = getTagsForDoc(doc)
         // })
 
-        // asyncForEach(docs, setTagsForDoc)
+        asyncForEach(docs, setTagsForDoc)
 
         // If I could create a magic promise as a result of a call to forEach
         // that represents the fact that I'll make/insert more
@@ -584,9 +600,16 @@ exports.getExtraDataForEachItem = function(assert) {
         // So I don't have to interface in a fancy way, I just have to create a function call that has an async
         // signature, and runs its own promises instead
 
-        as(function() {
+        // So, if they ask for forEach, just return async forEach
+        // If they ask for map, just use that, etc?
+        // What about parallel? 
 
-        })
+        // docs.forEach(function(doc) {
+        //     console.log("INSIDE FOR EACH", doc)
+        //     doc.tags = getTagsForDoc(doc)
+        // })
+
+        // when this fires, return a promise to call forEach async version, but convert mapping function as well
 
         // 1 // I could implement forEach and map by hand
             // a function that takes a promise doc
