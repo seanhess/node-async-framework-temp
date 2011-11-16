@@ -45,6 +45,9 @@ function makeWriter() {
 var cs = require("coffee-script")
 var as = require("./index.js")
 
+
+
+
 exports.simpleSteps = function(assert) {
 
     var num = 0
@@ -283,6 +286,30 @@ exports.accessSubFunctionOfPromise = function(assert) {
         assert.ifError(err)
         assert.deepEqual(val, "bob")
         // assert.ok(false, "Need to try an asynchronous function") // don't currently support asynchronous functions
+        assert.finish()
+    })
+}
+
+exports.callWithPromise = function(assert) {
+    function getStuff(cb) {
+        cb(null, {name: "bobby"})
+    }
+
+    function echo(param, cb) {
+        process.nextTick(function() {
+            cb(null, param)
+        })
+    }
+
+    var actions = as(getStuff, echo, function(getStuff, echo) {
+        var stuff = getStuff()
+        var result = echo(stuff.name)
+        return result
+    })
+
+    actions(function(err, stuff) {
+        assert.ifError(err)
+        assert.equal(stuff, "bobby")
         assert.finish()
     })
 }
@@ -613,21 +640,6 @@ exports.map = function(assert) {
 // 
 // exports.conditionalDefaults = function(assert) {
 //     assert.ok(false, "If you get nothing back from a db, use a default value instead")
-//     assert.finish()
-// }
-// 
-// exports.lists = function(assert) {
-//     assert.ok(false, "Take a list of ids and turn them into a list of objects in the same order")
-//     assert.finish()
-// }
-// 
-// exports.asyncMap = function(assert) {
-//     assert.ok(false, "Make it so you can map an array of somethings async style")
-//     assert.finish()
-// }
-// 
-// exports.asyncForEach = function(assert) {
-//     assert.ok(false, "Make it so you can async loop through something and modify each item")
 //     assert.finish()
 // }
 
