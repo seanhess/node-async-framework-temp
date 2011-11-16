@@ -63,7 +63,7 @@ convertValue = (obj) ->
 
 
 runPromises = (ps, cb) ->
-    console.log("RUN PROMISES", ps)
+    # console.log("RUN PROMISES", ps)
     parallels = []
 
     flushParallels = (cb) ->
@@ -159,7 +159,7 @@ makeProxy = (p) ->
         get: (r, n) -> 
             # console.log "GET", n
             if p[n]? then ensureBoundFunction p, p[n]
-            else if n == "forEach" then forEach p
+            else if n == "forEach" or n == "map" then map p
             else 
                 getter = Promise.Getter p, n
                 currentPromises.push getter
@@ -243,25 +243,25 @@ Promise.Value = (value) ->
 
 
 
-forEach = (arrayPromise) ->
-    captureForEach = (f) ->
-        console.log "For Each", arrayPromise, f
-        pForEach arrayPromise, convert f
+# MAPPING FUNCTIONS (map and forEach can be represented with the same function, just ignore the result for forEach)
+map = (arrayPromise) ->
+    callMap = (f) ->
+        convertedMap arrayPromise, as f
 
-# converted version of async for each
-asyncForEach = (vs, f, cb) ->
-    console.log "Async For Each"
+asyncMap = (vs, f, cb) ->
+    results = []
     vs = vs.concat()
     next = (err) ->
-        if err? then return cb err
         v = vs.shift()
-        if not v? then return cb()
-        f v, next
+        if not v? then return cb null, results
+        f v, (err, res) ->
+            if err? then return cb err
+            results.push res
+            next()
+
     next()
 
-pForEach = as asyncForEach
-
-
+convertedMap = convert asyncMap
 
 
 
