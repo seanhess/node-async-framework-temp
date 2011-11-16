@@ -5,25 +5,43 @@ Proxy = require 'node-proxy'
 # We use a global queue to track promises being created
 # since promise creation always occurs in a single run of the event loop, it works
 currentPromises = []
+creatingActions = false
 
 as = module.exports = (objects..., actions) ->
-    # step 1, create a function, that returns magic objects for each object
-    # actions.apply(null, objects.map(objPromise))
 
-    # while the function runs, all created promises go into our queue (globally)
-    currentPromises = []
-    ret = actions.apply null, objects.map convert
-    ps = currentPromises
-    currentPromises = []
+    # I'll have to create all the promises right before running
+    # this makes sense anyway, because otherwise they might be all full of values from the last time
+    createActions = (args...) ->
+        oldCurrentPromises = currentPromises
+        currentPromises = []
+        creatingActions = true
+        ret = actions.apply null, objects.map(convert).concat(args)
+        ps = currentPromises
+        currentPromises = oldCurrentPromises
+        creatingActions = false
+        return [ret, ps]
 
-    # console.log "RET", ret, ret.value
+    runActions = (args..., cb) ->
 
-    return (cb) ->
+        # we're calling an asyncified function while creating actions. convert it and run it!
+        if creatingActions
+            converted = convert runActions
+            return converted.apply null, args.concat(cb)
+
+        [ret, ps] = createActions.apply null, args
+
+        # console.log "RUN", args
+
+        if not cb? then throw new Error "Tried to call async block with no callback"
+
         runPromises ps.concat(), (err) -> 
             # console.log "DONE RUN", err, ret
             if err then return cb err
             cb null, promiseValue ret
         return undefined # otherwise we can't chain them together
+
+
+    
 
 as.convert = convert = (obj) ->
     if typeof obj == "function"

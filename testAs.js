@@ -45,9 +45,6 @@ function makeWriter() {
 var cs = require("coffee-script")
 var as = require("./index.js")
 
-
-/*
-
 exports.simpleSteps = function(assert) {
 
     var num = 0
@@ -421,9 +418,66 @@ exports.convertModulesOutside = function(assert) {
     })
 }
 
-*/
+// Should be able to pass parameters into action blocks
+// they are kind of useless otherwise :)
+exports.parametersToAsBlocks = function(assert) {
+
+    function echo(value, cb) {
+        process.nextTick(function() {
+            cb(null, value)
+        })
+    }
+
+    // crimeny! I don't even support arguments? That's a little useless!
+    // it gets called right away, no... yeah, when it's created
+    // it creates a bunch of promises
+    var actions = as(echo, function(echo, value) {
+        var result = echo(value)
+        return result
+    })
+
+    actions(10, function(err, val) {
+        assert.ifError(err)
+        assert.deepEqual(val, 10)
+        assert.finish()
+    })
+}
 
 
+exports.callActionsTwice = function(assert) {
+
+    function getData(name, cb) {
+        process.nextTick(function() {
+            cb(null, {name:name})
+        })
+    }
+
+    getDataAs = as.convert(getData)
+
+
+
+    // crimeny! I don't even support arguments? That's a little useless!
+    // it gets called right away, no... yeah, when it's created
+    // it creates a bunch of promises
+    var actions = as(function(name) {
+        var result = getDataAs(name)
+        return result
+    })
+
+    actions("bob", function(err, val) {
+        assert.ifError(err)
+        assert.deepEqual(val, {name:"bob"})
+
+        actions("henry", function(err, val) {
+            assert.ifError(err) 
+            assert.deepEqual(val, {name:"henry"})
+            assert.finish()
+        })
+    })
+}
+
+
+// should be able to call other asyncified versions without un-escaping them
 exports.nestedPromiseBlocks = function(assert) {
 
     var valueToReturn = 0
@@ -440,6 +494,11 @@ exports.nestedPromiseBlocks = function(assert) {
         })
     }
 
+    var setValueAndStuff = as(setValue, getValue, function(setValue, getValue, value) {
+        setValue(value)
+        return getValue()
+    })
+
     var getSeveralValues = as(getValue, function(getValue) {
         var values = {}
         values.one = getValue()
@@ -447,14 +506,13 @@ exports.nestedPromiseBlocks = function(assert) {
         return values
     })
 
-
-    var actions = as(getSeveralValues, setValue, getValue, function(getSeveralValues, setValue, getValue) {
-        setValue(20)
+    var actions = as(getSeveralValues, function(getSeveralValues) {
+        var result = setValueAndStuff(20) // there's no way. not if setValueSeveralTimes is already a normal function
         var values = getSeveralValues()
         return values
     })
 
-    actions(function(err, value) {
+    actions(20, function(err, value) {
         assert.ifError(err)
         assert.deepEqual(value, {one: 20, two: 20})
         assert.finish()
