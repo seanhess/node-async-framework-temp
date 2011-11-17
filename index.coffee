@@ -116,10 +116,11 @@ runPromise = (p, cb) ->
         process.nextTick -> cb err
     callback.inspect = -> "" # so it won't show up in traces
 
+    args = p.args.concat()
+    args.push callback
+    args = args.map promiseValue
+
     if p.type == "NORMAL"
-        args = p.args.concat()
-        args.push callback
-        args = args.map promiseValue
         ret = p.action.apply p, args # in normal mode, check ret
         if ret? then callback null, ret
 
@@ -129,7 +130,7 @@ runPromise = (p, cb) ->
         ret = switch p.type
             when "GET" then parentValue[p.property] 
             when "SET" then parentValue[p.property] = promiseValue p.setTo
-            when "CALL" then parentValue.apply p.parent.parent.value, p.args # you have to apply two-levels in, the immediate parent is the function wrapper itself
+            when "CALL" then  parentValue.apply p.parent.parent.value, args # you have to apply two-levels in, the immediate parent is the function wrapper itself
             when "VALUE" then p.value
             else throw new Error "Bad Promise Type"
 
@@ -248,6 +249,8 @@ map = (arrayPromise) ->
     callMap = (f) ->
         convertedMap arrayPromise, as f
 
+# use a sequential version. It's much easier to think about. Later, change to listen to .p() inside the loop
+# in other words, have it just return a bunch of promises that get injected into the flow
 asyncMap = (vs, f, cb) ->
     results = []
     vs = vs.concat()

@@ -42,10 +42,7 @@ function makeWriter() {
     return write
 }
 
-var cs = require("coffee-script")
-var as = require("./index.js")
-
-
+var as = require("./index")
 
 
 exports.simpleSteps = function(assert) {
